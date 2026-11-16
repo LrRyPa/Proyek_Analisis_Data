@@ -32,14 +32,13 @@ def load_data():
 
 df, coords = load_data()
 
-# ---------------- Sidebar ----------------
 st.sidebar.title("Filter")
 tmin, tmax = df["datetime"].min().date(), df["datetime"].max().date()
 rentang = st.sidebar.date_input("Rentang tanggal", (tmin, tmax), min_value=tmin, max_value=tmax)
 semua = sorted(df["station"].cat.categories)
 pilih = st.sidebar.multiselect("Stasiun", semua, default=semua)
 st.sidebar.caption("Sumber: Beijing Multi-Site Air Quality (12 stasiun, Mar 2013 – Feb 2017). "
-                   "Kategori PM2.5 mengikuti breakpoint 24 jam standar China HJ 633-2012.")
+                    "Kategori PM2.5 mengikuti breakpoint 24 jam standar China HJ 633-2012.")
 
 if len(rentang) != 2 or not pilih:
     st.info("Pilih rentang tanggal (awal dan akhir) serta minimal satu stasiun.")
@@ -51,7 +50,6 @@ if d.empty:
     st.warning("Tidak ada data untuk filter ini.")
     st.stop()
 
-# ---------------- Header & KPI ----------------
 st.title("🌫️ Dashboard Kualitas Udara Beijing (PM2.5)")
 st.caption("Kapan, di mana, dan dalam kondisi apa PM2.5 paling tinggi? Gunakan filter di sisi kiri.")
 
@@ -65,7 +63,6 @@ c4.metric("Stasiun tertinggi", per_stasiun.index[0], f"{per_stasiun.iloc[0]:.1f}
 
 tab1, tab2, tab3 = st.tabs(["📅 Tren & Musim", "📍 Stasiun & Peta", "🕒 Jam & Angin"])
 
-# ---------------- Tab 1 ----------------
 with tab1:
     st.subheader("Bagaimana tren PM2.5 bulanan dan kapan puncaknya?")
     fig = go.Figure(go.Scatter(x=bulanan.index, y=bulanan.values, mode="lines+markers",
@@ -88,7 +85,6 @@ with tab1:
                      yaxis_title="PM2.5 (µg/m³)", margin=dict(l=0, r=0, t=40, b=0))
     col_a.plotly_chart(f2, width="stretch")
 
-    # Perubahan antar-periode (Mar-Feb) hanya periode penuh yang tercakup filter
     bins = pd.to_datetime(["2013-03-01", "2014-03-01", "2015-03-01", "2016-03-01", "2017-03-01"])
     lab = ["Mar 2013–Feb 2014", "Mar 2014–Feb 2015", "Mar 2015–Feb 2016", "Mar 2016–Feb 2017"]
     per = d.assign(periode=pd.cut(d["datetime"], bins, labels=lab, right=False)).groupby("periode", observed=True)["PM2.5"].mean()
@@ -107,7 +103,6 @@ with tab1:
                 f"lebih tinggi ({pem['Pemanasan (Nov–Mar)']:.0f} vs {pem['Non-pemanasan (Apr–Okt)']:.0f} µg/m³) dibanding Apr–Okt. "
                 "Pusatkan intervensi dan kampanye kesehatan pada Oktober–Maret.")
 
-# ---------------- Tab 2 ----------------
 with tab2:
     st.subheader("Stasiun mana yang paling tercemar?")
     ring = (d.groupby("station", observed=True)["PM2.5"]
@@ -139,7 +134,6 @@ with tab2:
         fm.update_layout(height=440, margin=dict(l=0, r=0, t=40, b=0))
         col_b.plotly_chart(fm, width="stretch")
     else:
-        # Peta interaktif folium (Leaflet) dengan peta dasar Esri
         peta = folium.Map(
             location=[ring["lat"].mean(), ring["lon"].mean()], zoom_start=10,
             tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
@@ -177,7 +171,6 @@ with tab2:
                 f"dan **{r['station']}** terendah ({r['rata2']:.1f} µg/m³; {r['persen_tidak_sehat']:.1f}%): selisih {t['rata2'] / r['rata2'] - 1:+.0%}. "
                 "Prioritaskan pengawasan di stasiun berwarna merah.")
 
-# ---------------- Tab 3 ----------------
 with tab3:
     st.subheader("Jam berapa puncaknya, dan bagaimana pengaruh angin?")
     col_a, col_b = st.columns(2)
