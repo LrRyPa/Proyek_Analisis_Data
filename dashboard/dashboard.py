@@ -7,7 +7,7 @@ import folium
 from streamlit_folium import st_folium
 from pathlib import Path
 
-st.set_page_config(page_title="Dashboard Kualitas Udara Beijing", page_icon="🌫️", layout="wide")
+st.set_page_config(page_title="Dashboard Kualitas Udara Beijing", layout="wide")
 
 BASE_DIR = Path(__file__).parent
 ACCENT, BASE, DARK = "#C0392B", "#9AA5B1", "#2C3E50"
@@ -38,7 +38,7 @@ rentang = st.sidebar.date_input("Rentang tanggal", (tmin, tmax), min_value=tmin,
 semua = sorted(df["station"].cat.categories)
 pilih = st.sidebar.multiselect("Stasiun", semua, default=semua)
 st.sidebar.caption("Sumber: Beijing Multi-Site Air Quality (12 stasiun, Mar 2013 – Feb 2017). "
-                    "Kategori PM2.5 mengikuti breakpoint 24 jam standar China HJ 633-2012.")
+                   "Kategori PM2.5 mengikuti breakpoint 24 jam standar China HJ 633-2012.")
 
 if len(rentang) != 2 or not pilih:
     st.info("Pilih rentang tanggal (awal dan akhir) serta minimal satu stasiun.")
@@ -50,7 +50,7 @@ if d.empty:
     st.warning("Tidak ada data untuk filter ini.")
     st.stop()
 
-st.title("🌫️ Dashboard Kualitas Udara Beijing (PM2.5)")
+st.title("Dashboard Kualitas Udara Beijing (PM2.5)")
 st.caption("Kapan, di mana, dan dalam kondisi apa PM2.5 paling tinggi? Gunakan filter di sisi kiri.")
 
 bulanan = d.set_index("datetime")["PM2.5"].resample("MS").mean().dropna()
@@ -61,59 +61,76 @@ c2.metric("Jam > 115 µg/m³ (tidak sehat)", f"{(d['PM2.5'] > 115).mean():.1%}")
 c3.metric("Bulan tertinggi", f"{bulanan.idxmax():%b %Y}", f"{bulanan.max():.0f} µg/m³", delta_color="off")
 c4.metric("Stasiun tertinggi", per_stasiun.index[0], f"{per_stasiun.iloc[0]:.1f} µg/m³", delta_color="off")
 
-tab1, tab2, tab3 = st.tabs(["📅 Tren & Musim", "📍 Stasiun & Peta", "🕒 Jam & Angin"])
+tab1, tab2, tab3 = st.tabs(["Musim Pemanasan", "Stasiun & Peta", "Kecepatan Angin"])
 
 with tab1:
-    st.subheader("Bagaimana tren PM2.5 bulanan dan kapan puncaknya?")
-    fig = go.Figure(go.Scatter(x=bulanan.index, y=bulanan.values, mode="lines+markers",
-                               line=dict(color=DARK, width=2.5), marker=dict(size=5),
-                               hovertemplate="%{x|%b %Y}: %{y:.1f} µg/m³<extra></extra>"))
-    for y in range(bulanan.index.year.min(), bulanan.index.year.max() + 2):
-        fig.add_vrect(x0=f"{y-1}-11-01", x1=f"{y}-03-31", fillcolor=ACCENT, opacity=0.08, line_width=0)
-    fig.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="PM2.5 (µg/m³)", xaxis_title=None,
-                      template="plotly_white")
-    fig.update_xaxes(range=[bulanan.index.min(), bulanan.index.max()])
-    st.plotly_chart(fig, width="stretch")
-    st.caption("Blok merah muda = musim pemanasan (Nov–Mar).")
-
-    col_a, col_b = st.columns(2)
+    st.subheader("Berapa persen rata-rata PM2.5 pada musim pemanasan (Nov–Mar) lebih tinggi dibandingkan non-pemanasan (Apr–Okt)?")
+    pem = d.groupby("musim")["PM2.5"].mean()
+    ada_dua = {"Pemanasan (Nov–Mar)", "Non-pemanasan (Apr–Okt)"} <= set(pem.index)
     kal = d.groupby("month")["PM2.5"].mean().reindex(range(1, 13))
+    col_a, col_b = st.columns([1, 1.6])
+
+    if ada_dua:
+        v_pem, v_non = pem["Pemanasan (Nov–Mar)"], pem["Non-pemanasan (Apr–Okt)"]
+        f1 = go.Figure(go.Bar(x=["Non-pemanasan (Apr–Okt)", "Pemanasan (Nov–Mar)"], y=[v_non, v_pem],
+                              marker_color=[BASE, ACCENT], text=[f"{v_non:.1f}", f"{v_pem:.1f}"], textposition="outside"))
+        f1.update_layout(title=f"Musim pemanasan {v_pem / v_non - 1:+.1%} lebih tinggi", height=380, template="plotly_white",
+                         yaxis_title="Rata-rata PM2.5 (µg/m³)", yaxis_range=[0, v_pem * 1.2], margin=dict(l=0, r=0, t=40, b=0))
+        col_a.plotly_chart(f1, width="stretch")
+    else:
+        col_a.info("Rentang tanggal yang dipilih belum mencakup kedua musim.")
+
     warna = [ACCENT if m in (11, 12, 1, 2, 3) else BASE for m in kal.index]
     f2 = go.Figure(go.Bar(x=BULAN, y=kal.values, marker_color=warna, text=kal.round(0), textposition="outside",
                           hovertemplate="%{x}: %{y:.1f} µg/m³<extra></extra>"))
-    f2.update_layout(title="Rata-rata per bulan kalender", height=360, template="plotly_white",
+    f2.update_layout(title="Rata-rata PM2.5 per bulan (merah = musim pemanasan)", height=380, template="plotly_white",
                      yaxis_title="PM2.5 (µg/m³)", margin=dict(l=0, r=0, t=40, b=0))
-    col_a.plotly_chart(f2, width="stretch")
+    col_b.plotly_chart(f2, width="stretch")
 
-    bins = pd.to_datetime(["2013-03-01", "2014-03-01", "2015-03-01", "2016-03-01", "2017-03-01"])
-    lab = ["Mar 2013–Feb 2014", "Mar 2014–Feb 2015", "Mar 2015–Feb 2016", "Mar 2016–Feb 2017"]
-    per = d.assign(periode=pd.cut(d["datetime"], bins, labels=lab, right=False)).groupby("periode", observed=True)["PM2.5"].mean()
-    f3 = go.Figure(go.Bar(x=per.index.astype(str), y=per.values, marker_color=[BASE] * (len(per) - 1) + [ACCENT],
-                          text=per.round(1), textposition="outside"))
-    judul = "Rata-rata PM2.5 per tahun pemantauan"
-    if len(per) >= 2:
-        judul += f" ({per.iloc[-1] / per.iloc[0] - 1:+.1%} awal → akhir)"
-    f3.update_layout(title=judul, height=360, template="plotly_white", yaxis_title="PM2.5 (µg/m³)",
-                     margin=dict(l=0, r=0, t=40, b=0))
-    col_b.plotly_chart(f3, width="stretch")
+    if ada_dua:
+        st.info(f"**Insight:** rata-rata PM2.5 musim pemanasan **{v_pem / v_non - 1:+.1%}** lebih tinggi "
+                f"({v_pem:.1f} vs {v_non:.1f} µg/m³). Bulan tertinggi: **{BULAN[int(kal.idxmax()) - 1]}** ({kal.max():.1f} µg/m³). "
+                "Pembatasan emisi perlu difokuskan pada musim pemanasan, dimulai sejak Oktober.")
 
-    pem = d.groupby("musim")["PM2.5"].mean()
-    if {"Pemanasan (Nov–Mar)", "Non-pemanasan (Apr–Okt)"} <= set(pem.index):
-        st.info(f"**Insight:** musim pemanasan rata-rata **{pem['Pemanasan (Nov–Mar)'] / pem['Non-pemanasan (Apr–Okt)'] - 1:+.0%}** "
-                f"lebih tinggi ({pem['Pemanasan (Nov–Mar)']:.0f} vs {pem['Non-pemanasan (Apr–Okt)']:.0f} µg/m³) dibanding Apr–Okt. "
-                "Pusatkan intervensi dan kampanye kesehatan pada Oktober–Maret.")
+    with st.expander("Analisis tambahan: tren bulanan dan perubahan per tahun pemantauan"):
+        fig = go.Figure(go.Scatter(x=bulanan.index, y=bulanan.values, mode="lines+markers",
+                                   line=dict(color=DARK, width=2.5), marker=dict(size=5),
+                                   hovertemplate="%{x|%b %Y}: %{y:.1f} µg/m³<extra></extra>"))
+        for y in range(bulanan.index.year.min(), bulanan.index.year.max() + 2):
+            fig.add_vrect(x0=f"{y-1}-11-01", x1=f"{y}-03-31", fillcolor=ACCENT, opacity=0.08, line_width=0)
+        fig.update_layout(title="Tren rata-rata PM2.5 bulanan (blok merah muda = musim pemanasan)", height=360,
+                          yaxis_title="PM2.5 (µg/m³)", xaxis_title=None, template="plotly_white", margin=dict(l=0, r=0, t=40, b=0))
+        fig.update_xaxes(range=[bulanan.index.min(), bulanan.index.max()])
+        st.plotly_chart(fig, width="stretch")
+
+        bins = pd.to_datetime(["2013-03-01", "2014-03-01", "2015-03-01", "2016-03-01", "2017-03-01"])
+        lab = ["Mar 2013–Feb 2014", "Mar 2014–Feb 2015", "Mar 2015–Feb 2016", "Mar 2016–Feb 2017"]
+        per = d.assign(periode=pd.cut(d["datetime"], bins, labels=lab, right=False)).groupby("periode", observed=True)["PM2.5"].mean()
+        judul = "Rata-rata PM2.5 per tahun pemantauan"
+        if len(per) >= 2:
+            judul += f" ({per.iloc[-1] / per.iloc[0] - 1:+.1%} awal → akhir)"
+        f3 = go.Figure(go.Bar(x=per.index.astype(str), y=per.values, marker_color=[BASE] * (len(per) - 1) + [ACCENT],
+                              text=per.round(1), textposition="outside"))
+        f3.update_layout(title=judul, height=340, template="plotly_white", yaxis_title="PM2.5 (µg/m³)",
+                         margin=dict(l=0, r=0, t=40, b=0))
+        st.plotly_chart(f3, width="stretch")
 
 with tab2:
-    st.subheader("Stasiun mana yang paling tercemar?")
+    st.subheader("Stasiun mana yang memiliki persentase jam PM2.5 di atas 115 µg/m³ paling tinggi dan paling rendah?")
     ring = (d.groupby("station", observed=True)["PM2.5"]
             .agg(rata2="mean", persen_tidak_sehat=lambda s: (s > 115).mean() * 100).reset_index()
             .merge(coords, on="station").sort_values("rata2"))
     col_a, col_b = st.columns([1, 1.2])
 
-    warna = [ACCENT if s == ring["station"].iloc[-1] else (DARK if s == ring["station"].iloc[0] else BASE) for s in ring["station"]]
-    f4 = go.Figure(go.Bar(y=ring["station"], x=ring["rata2"], orientation="h", marker_color=warna,
-                          text=ring["rata2"].round(1), textposition="outside"))
-    f4.update_layout(title="Rata-rata PM2.5 per stasiun (µg/m³)", height=440, template="plotly_white",
+    rp = ring.sort_values("persen_tidak_sehat")
+    rata_semua = (d["PM2.5"] > 115).mean() * 100
+    warna = [ACCENT if s == rp["station"].iloc[-1] else (DARK if s == rp["station"].iloc[0] else BASE) for s in rp["station"]]
+    f4 = go.Figure(go.Bar(y=rp["station"], x=rp["persen_tidak_sehat"], orientation="h", marker_color=warna,
+                          text=rp["persen_tidak_sehat"].round(1).astype(str) + "%", textposition="outside"))
+    f4.add_vline(x=rata_semua, line_dash="dash", line_color="gray",
+                 annotation_text=f"Rata-rata {rata_semua:.1f}%", annotation_position="bottom right")
+    f4.update_layout(title="Persentase jam dengan PM2.5 > 115 µg/m³ per stasiun", height=440, template="plotly_white",
+                     xaxis_title="% jam", xaxis_range=[0, rp["persen_tidak_sehat"].max() * 1.15],
                      margin=dict(l=0, r=30, t=40, b=0))
     col_a.plotly_chart(f4, width="stretch")
 
@@ -166,43 +183,51 @@ with tab2:
     st.plotly_chart(f5, width="stretch")
 
     if len(ring) > 1:
-        t, r = ring.iloc[-1], ring.iloc[0]
-        st.info(f"**Insight:** **{t['station']}** tertinggi ({t['rata2']:.1f} µg/m³; {t['persen_tidak_sehat']:.1f}% jam > 115) "
-                f"dan **{r['station']}** terendah ({r['rata2']:.1f} µg/m³; {r['persen_tidak_sehat']:.1f}%): selisih {t['rata2'] / r['rata2'] - 1:+.0%}. "
+        t, r = rp.iloc[-1], rp.iloc[0]
+        st.info(f"**Insight:** persentase jam di atas 115 µg/m³ tertinggi di **{t['station']}** ({t['persen_tidak_sehat']:.1f}%) "
+                f"dan terendah di **{r['station']}** ({r['persen_tidak_sehat']:.1f}%), selisih "
+                f"{t['persen_tidak_sehat'] - r['persen_tidak_sehat']:.1f} poin persentase. "
                 "Prioritaskan pengawasan di stasiun berwarna merah.")
 
 with tab3:
-    st.subheader("Jam berapa puncaknya, dan bagaimana pengaruh angin?")
+    st.subheader("Berapa persen PM2.5 turun saat angin >5 m/s dibanding ≤1 m/s, dan pada kecepatan berapa peringatan perlu diaktifkan?")
+    ang = d.groupby("kelas_angin", observed=True)["PM2.5"].mean()
     col_a, col_b = st.columns(2)
 
-    pola = d.groupby(["musim", "hour"])["PM2.5"].mean().reset_index()
-    f6 = px.line(pola, x="hour", y="PM2.5", color="musim",
-                 color_discrete_map={"Pemanasan (Nov–Mar)": ACCENT, "Non-pemanasan (Apr–Okt)": BASE},
-                 labels={"hour": "Jam", "PM2.5": "PM2.5 (µg/m³)", "musim": ""})
-    f6.update_traces(line_width=3)
-    f6.update_layout(title="Pola harian PM2.5", height=380, template="plotly_white", legend=dict(orientation="h", y=-0.2),
-                     xaxis=dict(tickmode="linear", dtick=3), margin=dict(l=0, r=0, t=40, b=0))
-    col_a.plotly_chart(f6, width="stretch")
-
-    ang = d.groupby("kelas_angin", observed=True)["PM2.5"].mean()
-    f7 = go.Figure(go.Bar(x=ang.index.astype(str), y=ang.values, text=ang.round(0), textposition="outside",
-                          marker_color=[ACCENT, "#D98880", BASE, BASE, DARK][:len(ang)]))
-    f7.update_layout(title="PM2.5 menurut kecepatan angin (m/s)", height=380, template="plotly_white",
-                     xaxis_title="Kecepatan angin (m/s)", yaxis_title="PM2.5 (µg/m³)", margin=dict(l=0, r=0, t=40, b=0))
-    col_b.plotly_chart(f7, width="stretch")
-
-    jam = d.groupby("hour")["PM2.5"].mean()
-    msg = f"**Insight:** puncak harian pada **{jam.idxmax():02d}:00** ({jam.max():.0f} µg/m³), terendah **{jam.idxmin():02d}:00** ({jam.min():.0f} µg/m³)."
+    judul_angin = "PM2.5 menurut kecepatan angin (m/s)"
     if len(ang) >= 2:
-        msg += (f" PM2.5 turun **{ang.iloc[-1] / ang.iloc[0] - 1:+.0%}** dari angin {ang.index[0]} ke {ang.index[-1]} m/s."
-                " Siapkan peringatan dini pada sore–malam dan saat angin lemah.")
+        judul_angin = f"PM2.5 turun {ang.iloc[-1] / ang.iloc[0] - 1:.0%} dari angin {ang.index[0]} ke {ang.index[-1]} m/s"
+    f7 = go.Figure(go.Bar(x=ang.index.astype(str), y=ang.values, text=ang.round(0), textposition="outside",
+                          marker_color=[ACCENT, ACCENT, BASE, BASE, DARK][:len(ang)]))
+    f7.add_hline(y=75, line_dash="dash", line_color="gray", annotation_text="Batas 75 µg/m³", annotation_position="top right")
+    f7.update_layout(title=judul_angin, height=400, template="plotly_white",
+                     xaxis_title="Kecepatan angin (m/s)", yaxis_title="PM2.5 (µg/m³)", margin=dict(l=0, r=0, t=40, b=0))
+    col_a.plotly_chart(f7, width="stretch")
+
+    wd = d.groupby("wd")["PM2.5"].mean().reindex(["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"])
+    f8 = go.Figure(go.Barpolar(r=wd.values, theta=wd.index, marker_color=[ACCENT if v > 95 else BASE for v in wd.fillna(0)]))
+    f8.update_layout(title="Tambahan: PM2.5 menurut arah datangnya angin", height=400, template="plotly_white",
+                     polar=dict(angularaxis=dict(direction="clockwise", rotation=90)), margin=dict(l=0, r=0, t=50, b=20))
+    col_b.plotly_chart(f8, width="stretch")
+
+    msg = "**Insight:**"
+    if len(ang) >= 2:
+        msg += f" PM2.5 turun **{ang.iloc[-1] / ang.iloc[0] - 1:+.1%}** dari angin {ang.index[0]} ke {ang.index[-1]} m/s."
+        tinggi = [str(k) for k, v in ang.items() if v > 75]
+        if tinggi:
+            msg += f" Rata-rata masih di atas 75 µg/m³ pada angin {', '.join(tinggi)} m/s, sehingga peringatan perlu diaktifkan pada kondisi angin lemah tersebut."
     st.info(msg)
 
-    urutan = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-    wd = d.groupby("wd")["PM2.5"].mean().reindex(urutan)
-    f8 = go.Figure(go.Barpolar(r=wd.values, theta=urutan, marker_color=[ACCENT if v > 95 else BASE for v in wd.fillna(0)]))
-    f8.update_layout(title="PM2.5 menurut arah datangnya angin", height=420, template="plotly_white",
-                     polar=dict(angularaxis=dict(direction="clockwise", rotation=90)), margin=dict(l=0, r=0, t=50, b=20))
-    st.plotly_chart(f8, width="stretch")
+    with st.expander("Analisis tambahan: pola harian PM2.5"):
+        pola = d.groupby(["musim", "hour"])["PM2.5"].mean().reset_index()
+        f6 = px.line(pola, x="hour", y="PM2.5", color="musim",
+                     color_discrete_map={"Pemanasan (Nov–Mar)": ACCENT, "Non-pemanasan (Apr–Okt)": BASE},
+                     labels={"hour": "Jam", "PM2.5": "PM2.5 (µg/m³)", "musim": ""})
+        f6.update_traces(line_width=3)
+        f6.update_layout(title="Pola harian PM2.5", height=360, template="plotly_white", legend=dict(orientation="h", y=-0.25),
+                         xaxis=dict(tickmode="linear", dtick=3), margin=dict(l=0, r=0, t=40, b=0))
+        st.plotly_chart(f6, width="stretch")
+        jam = d.groupby("hour")["PM2.5"].mean()
+        st.caption(f"Puncak harian pukul {jam.idxmax():02d}:00 ({jam.max():.0f} µg/m³), terendah pukul {jam.idxmin():02d}:00 ({jam.min():.0f} µg/m³).")
 
-st.caption("Proyek Analisis Data – Air Quality Dataset")
+st.caption("Proyek Analisis Data")
