@@ -1,6 +1,6 @@
 # Proyek Analisis Data: Air Quality Dataset 
 
-Analisis kualitas udara (PM2.5) dari 12 stasiun di Beijing periode Maret 2013 – Februari 2017, lengkap dengan dashboard interaktif menggunakan Streamlit.
+Analisis kualitas udara (PM2.5) dari 12 stasiun di Beijing periode Maret 2013 – Februari 2017.
 
 **Dashboard online:** https://proyek-kualitas-udara.streamlit.app
 
