@@ -19,12 +19,6 @@ Proyek_Analisis_Data/
 └── url.txt                     
 ```
 
-## Pertanyaan Bisnis
-Isi bagian ini sesuai pertanyaan di `notebook.ipynb`, misalnya:
-1. Berapa persen rata-rata PM2.5 pada musim pemanasan (Nov–Mar) lebih tinggi dibanding Apr–Okt selama Mar 2013 – Feb 2017?
-2. Stasiun mana yang memiliki persentase jam dengan PM2.5 di atas 115 µg/m³ paling tinggi dan paling rendah?
-3. Berapa persen penurunan rata-rata PM2.5 saat angin >5 m/s dibanding ≤1 m/s?
-
 ## Setup Environment - Anaconda
 ```
 conda create --name main-ds python=3.11
